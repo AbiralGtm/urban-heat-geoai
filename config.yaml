@@ -1,0 +1,40 @@
+# Kathmandu urban heat GeoAI - project settings
+# Every stage reads this file, so a change here propagates through the pipeline.
+
+city: Kathmandu
+
+# Study box in WGS84 degrees: [west, south, east, north]
+bbox: [85.22, 27.60, 85.52, 27.83]
+
+crs:
+  geographic: EPSG:4326   # inputs from Earth Engine
+  projected: EPSG:32645   # UTM 45N, used for areas, densities and distances
+
+grid:
+  h3_resolution: 8        # ~0.74 km2 per hexagon
+  parent_resolution: 6    # blocks used as groups for spatial cross-validation
+
+season:
+  # pre-monsoon window used for the Landsat composite
+  start: 2024-03-15
+  end: 2024-05-31
+  max_cloud_cover: 30
+
+features:
+  # a hexagon is dropped when fewer than this share of its LST pixels are valid
+  min_valid_pixel_share: 0.60
+
+model:
+  target: lst_mean
+  n_estimators: 500
+  min_samples_leaf: 2
+  max_features: 0.5
+  n_splits: 5
+  seeds: [0, 1, 2]
+
+paths:
+  raw_raster_dir: data/raw/kathmandu
+  grid: data/processed/kathmandu_grid.gpkg
+  features: data/processed/features.csv
+  outputs_dir: outputs
+  web_geojson: docs/data/kathmandu.geojson

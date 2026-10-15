@@ -1,0 +1,22 @@
+# environments
+.venv/
+__pycache__/
+*.pyc
+
+# raw rasters downloaded from Earth Engine (large, not committed)
+data/raw/**
+!data/raw/kathmandu/
+!data/raw/kathmandu/.gitkeep
+*.tif
+*.tif.aux.xml
+
+# intermediate tables
+data/processed/*.gpkg
+data/processed/*.csv
+
+# model artefacts
+outputs/*.png
+outputs/*.csv
+
+# OS
+.DS_Store
