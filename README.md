@@ -27,6 +27,25 @@ temperature, and it does not show that any feature causes heat.
 Every stage reads `config.yaml` and the output of the stage before it, so any stage can
 be re-run on its own.
 
+## Satellite data
+
+`gee/heat_kathmandu.js` runs in the Earth Engine Code Editor and writes the rasters to
+Drive; download them into `data/raw/kathmandu/`.
+
+Scene selection: Landsat 8 and 9 Collection 2 Level 2, 15 March to 31 May 2024, scene
+cloud cover under 30 %. Four scenes pass that filter over the valley (14 April,
+30 April, 16 May, 24 May 2024). Per-pixel cloud, cloud shadow, cirrus and saturation are
+masked with `QA_PIXEL` and `QA_RADSAT` before compositing, and the composite is the
+median of the four scenes, so one bad pixel in one scene cannot pull it.
+
+The script also exports `valid_share`, the fraction of the four scenes for which each
+pixel survived the mask. Stage 3 uses it to drop hexagons that are mostly gap.
+
+Surface temperature comes from band `ST_B10` converted to degrees Celsius
+(`ST_B10 * 0.00341802 + 149.0 - 273.15`). It is a daytime skin temperature at roughly
+10:30 local time with a native thermal resolution of about 100 m, not air temperature
+and not what a person feels.
+
 ## Setup
 
 ```bash
