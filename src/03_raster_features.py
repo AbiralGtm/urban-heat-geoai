@@ -20,8 +20,9 @@ from rasterio.features import rasterize
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Continuous layers: mean and spread per hexagon.
-CONTINUOUS = ["lst", "ndvi", "dem", "slope"]
+# Continuous layers: mean and spread per hexagon. valid_share is the fraction of the
+# Landsat scenes for which a pixel survived the cloud mask, exported by the same script.
+CONTINUOUS = ["lst", "ndvi", "dem", "slope", "valid_share"]
 
 # ESA WorldCover v200 class codes, kept as readable names.
 WORLDCOVER_CLASSES = {
@@ -163,14 +164,23 @@ def drop_gappy_cells(features: pd.DataFrame, config: dict) -> pd.DataFrame:
     missing.
     """
     threshold = config["features"]["min_valid_pixel_share"]
-    share = features["lst_valid_share"].fillna(0.0)
+
+    # valid_share_mean counts clear scenes per pixel, which is stricter than asking
+    # whether the median composite produced a number at all. It is used when the
+    # Earth Engine export is present.
+    if "valid_share_mean" in features:
+        share = features["valid_share_mean"].fillna(0.0)
+    else:
+        print("note: valid_share raster not found, falling back to the share of "
+              "hexagon pixels that carry a temperature")
+        share = features["lst_valid_share"].fillna(0.0)
 
     empty = int((share == 0).sum())
     gappy = int(((share > 0) & (share < threshold)).sum())
     kept = features.loc[share >= threshold].copy()
 
-    print(f"dropped {empty} cells with no surface temperature (outside the exported rasters)")
-    print(f"dropped {gappy} cells below {threshold:.0%} valid pixels")
+    print(f"dropped {empty} cells with no valid observation (outside the exported rasters)")
+    print(f"dropped {gappy} cells below {threshold:.0%} scene coverage")
     print(f"kept {len(kept)} of {len(features)} cells")
     return kept.reset_index(drop=True)
 
