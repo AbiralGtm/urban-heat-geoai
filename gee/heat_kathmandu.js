@@ -75,16 +75,21 @@ var slope = ee.Terrain.slope(dem.setDefaultProjection('EPSG:4326', null, 30))
     .rename('slope').clip(region);
 var worldcover = ee.ImageCollection('ESA/WorldCover/v200').first()
     .select('Map').rename('worldcover').clip(region);
-var population = ee.ImageCollection('WorldPop/GP/100m/pop')
+// WorldPop holds a count per cell. A count is not preserved when the raster is
+// reprojected, because the cell changes size, so it is turned into people per square
+// metre at its own projection first and multiplied back by the cell area in stage 3.
+var populationCount = ee.ImageCollection('WorldPop/GP/100m/pop')
     .filter(ee.Filter.eq('country', 'NPL'))
     .filter(ee.Filter.eq('year', 2020))
-    .first()
-    .rename('population').clip(region);
+    .first();
+var populationDensity = populationCount
+    .divide(ee.Image.pixelArea())
+    .reproject(populationCount.projection())
+    .rename('pop_density').clip(region);
 
 // ---------------------------------------------------------------- exports
 // Land cover is categorical, so it keeps Earth Engine's default nearest-neighbour
-// resampling; population is a count per 100 m cell and is exported at its own
-// resolution so that the totals stay right.
+// resampling; population leaves as a density and is exported near its own resolution.
 function export_(image, name, scale, crs) {
   Export.image.toDrive({
     image: image.toFloat(),
@@ -103,5 +108,5 @@ export_(composite.select('ndvi'), 'ndvi');
 export_(dem, 'dem');
 export_(slope, 'slope');
 export_(worldcover, 'worldcover');
-export_(population, 'pop', 100);
+export_(populationDensity, 'pop_density', 100);
 export_(validShare, 'valid_share');

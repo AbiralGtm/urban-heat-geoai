@@ -130,11 +130,24 @@ def worldcover_shares(grid: gpd.GeoDataFrame, path: Path) -> pd.DataFrame:
     return frame.loc[:, frame.fillna(0).sum() > 0]
 
 
-def population_sum(grid: gpd.GeoDataFrame, path: Path) -> pd.DataFrame:
-    """WorldPop is a count per 100 m cell, so the pixels are summed, not averaged."""
+def population_sum(grid: gpd.GeoDataFrame, path: Path, is_density: bool) -> pd.DataFrame:
+    """Sum WorldPop over each hexagon.
+
+    The preferred input is people per square metre, exported that way because a count
+    per cell is inflated when the raster is reprojected onto larger cells. Each pixel is
+    then multiplied by its own area before summing. A plain count raster is still
+    accepted, with a warning, since its totals carry that inflation.
+    """
     with rasterio.open(path) as src:
         zones = zone_index(grid, src)
         band, valid = read_valid(src)
+        pixel_area = abs(src.transform.a * src.transform.e)
+
+    if is_density:
+        band = band * pixel_area
+    else:
+        print("warning: population raster holds counts per cell; totals are inflated by "
+              "reprojection. Re-run the pop_density export in gee/heat_kathmandu.js")
 
     keep = (zones > 0) & valid
     sums = np.bincount(zones[keep] - 1, weights=band[keep], minlength=len(grid))
@@ -185,12 +198,15 @@ def main() -> None:
         frames.append(worldcover_shares(grid, cover_path))
         print("worldcover: done")
 
-    pop_path = raster_path(raw_dir, "pop")
+    pop_path = raster_path(raw_dir, "pop_density")
+    is_density = pop_path is not None
+    if pop_path is None:
+        pop_path = raster_path(raw_dir, "pop")
     if pop_path is None:
         print("warning: population raster not found, skipping population")
     else:
-        frames.append(population_sum(grid, pop_path))
-        print("pop: done")
+        frames.append(population_sum(grid, pop_path, is_density))
+        print(f"{pop_path.stem.replace('kathmandu_', '')}: done")
 
     if not frames:
         raise SystemExit("no rasters found; run gee/heat_kathmandu.js and download the exports")
