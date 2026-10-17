@@ -141,6 +141,27 @@ def population_sum(grid: gpd.GeoDataFrame, path: Path) -> pd.DataFrame:
     return pd.DataFrame({"population": sums}, index=grid["h3_id"])
 
 
+def drop_gappy_cells(features: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Keep only hexagons with enough valid surface-temperature pixels.
+
+    A hexagon on the edge of the exported rasters, or under persistent cloud, carries a
+    mean over a handful of pixels that is not comparable with the rest of the valley.
+    The share is measured on the model target, since that is the layer a cell cannot be
+    missing.
+    """
+    threshold = config["features"]["min_valid_pixel_share"]
+    share = features["lst_valid_share"].fillna(0.0)
+
+    empty = int((share == 0).sum())
+    gappy = int(((share > 0) & (share < threshold)).sum())
+    kept = features.loc[share >= threshold].copy()
+
+    print(f"dropped {empty} cells with no surface temperature (outside the exported rasters)")
+    print(f"dropped {gappy} cells below {threshold:.0%} valid pixels")
+    print(f"kept {len(kept)} of {len(features)} cells")
+    return kept.reset_index(drop=True)
+
+
 def main() -> None:
     config = load_config()
     raw_dir = ROOT / config["paths"]["raw_raster_dir"]
@@ -177,6 +198,8 @@ def main() -> None:
     features = pd.concat(frames, axis=1).reset_index()
     features = grid.drop(columns="geometry").merge(features, on="h3_id", how="left")
     features["pop_density"] = features["population"] / features["area_km2"]
+
+    features = drop_gappy_cells(features, config)
 
     out_path = ROOT / config["paths"]["features"]
     out_path.parent.mkdir(parents=True, exist_ok=True)
