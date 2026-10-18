@@ -116,6 +116,37 @@ def summarise(folds: list[dict]) -> dict:
     }
 
 
+def shap_summary(model: RandomForestRegressor, X: pd.DataFrame, outputs: Path) -> dict:
+    """Write a SHAP summary plot and return the mean absolute value per feature.
+
+    SHAP says which features the forest leaned on and in which direction. It describes
+    the model, not the city: a feature can stand in for something it is correlated with,
+    and none of this shows that a feature causes heat.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import shap
+
+    explainer = shap.TreeExplainer(model)
+    values = explainer.shap_values(X, check_additivity=False)
+
+    plt.figure()
+    shap.summary_plot(values, X, show=False, plot_size=(9, 6))
+    plt.title("What the forest used to predict hexagon temperature")
+    plt.tight_layout()
+    plot_path = outputs / "shap_summary.png"
+    plt.savefig(plot_path, dpi=150)
+    plt.close("all")
+    print(f"written: {plot_path.relative_to(ROOT)}")
+
+    mean_abs = np.abs(values).mean(axis=0)
+    return {
+        column: float(value)
+        for column, value in sorted(zip(X.columns, mean_abs), key=lambda item: -item[1])
+    }
+
+
 def main() -> None:
     config = load_config()
     target = config["model"]["target"]
@@ -167,6 +198,9 @@ def main() -> None:
 
     outputs = ROOT / config["paths"]["outputs_dir"]
     outputs.mkdir(parents=True, exist_ok=True)
+
+    results["shap_mean_abs"] = shap_summary(final, X, outputs)
+
     (outputs / "metrics.json").write_text(json.dumps(results, indent=2))
     predictions.to_csv(outputs / "predictions.csv", index=False)
 
