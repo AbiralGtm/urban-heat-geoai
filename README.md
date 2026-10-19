@@ -55,9 +55,77 @@ pip install -r requirements.txt
 
 ## Results
 
-To be filled in with the numbers the code produces. Nothing is reported here before it
-has been measured.
+980 hexagons survive the quality filter out of 1,032 in the study box; 52 are dropped
+for covering less than 60 % of the four Landsat scenes. Mean surface temperature across
+them runs from 21.7 to 43.2 °C, averaging 35.0 °C.
+
+A Random Forest (500 trees, `min_samples_leaf` 2, `max_features` 0.5) predicts a
+hexagon's mean temperature from 14 features. Every number below is the mean over three
+seeds of a 5-fold cross-validation, with the spread over seeds in brackets.
+
+| Cross-validation | R² | RMSE |
+| --- | --- | --- |
+| Random folds | 0.950 (± 0.001) | 1.07 °C (± 0.004) |
+| Spatial folds, H3 resolution 6 blocks | 0.900 (± 0.000) | 1.21 °C (± 0.002) |
+
+The gap of 0.051 in R² is the point of running both. Random folds put a hexagon's
+immediate neighbours in the training set, which is close to testing on the training
+data; the spatial folds hold out whole blocks of about 36 hexagons, so the test areas
+are genuinely unseen. The spatial score is the honest one.
+
+Ranked by mean absolute SHAP value, in °C of effect on the prediction:
+
+| Feature | Mean absolute SHAP |
+| --- | --- |
+| NDVI (greenness) | 2.08 |
+| Tree-cover share | 0.93 |
+| Elevation | 0.90 |
+| Slope | 0.19 |
+| Elevation spread within the hexagon | 0.15 |
+
+Greenness dominates, and built-up share and road density add little once greenness is
+known — they largely say the same thing about a hexagon. Elevation matters because the
+valley floor is both the warmest and the most built-up part of the study box, so the two
+cannot be separated with this design.
+
+Exposure, the heat index times normalised log population density, puts 98 hexagons in
+the top decile. The map at `docs/index.html` shows both layers.
 
 ## Limits
 
-To be written once the model has been run.
+- Four scenes, one pre-monsoon season, one year. Nothing here describes another season
+  or a trend over time.
+- Landsat's thermal band is about 100 m natively and the overpass is near 10:30 in the
+  morning. This is daytime skin temperature, not air temperature and not what a person
+  feels, and it says nothing about night-time heat.
+- The model describes patterns in this valley. It is not a forecast, and no feature here
+  is shown to cause heat; features that travel together cannot be separated.
+- Elevation and built-up land are confounded in the Kathmandu valley, so their
+  contributions should not be read separately.
+- The exposure index measures how many people live where it is hot. It does not measure
+  harm, and it carries nothing about age, income, housing or access to cooling.
+- WorldPop is a modelled estimate. Its totals over this box come to 7.7 million people,
+  well above the census figure for the valley, so the population numbers are used only
+  as a relative, normalised layer and should not be quoted as counts.
+- Spatial cross-validation uses 27 blocks, which is a small number of groups; the fold
+  scores are correspondingly coarse.
+- A first attempt at a flood-extent project was dropped: Sentinel-1 had no usable image
+  at the September 2024 flood peak, so there were too few flood labels to learn from.
+
+
+## Reproducing
+
+```bash
+python src/01_make_grid.py          # H3 grid over the study box
+# run gee/heat_kathmandu.js in the Earth Engine Code Editor,
+# then put the exported .tif files in data/raw/kathmandu/
+python src/03_raster_features.py    # zonal statistics per hexagon
+python src/04_osm_features.py       # OpenStreetMap features, --skip to leave them out
+python src/05_model.py              # cross-validation, SHAP, metrics
+python src/06_export_web.py         # vulnerability index and GeoJSON
+python -m http.server --directory docs   # view the map at localhost:8000
+```
+
+The rasters, the grid and the feature table are not committed; the scripts rebuild them.
+`outputs/metrics.json` and `outputs/exposure_summary.json` are committed, so the numbers
+in this README can be checked against the run that produced them.
