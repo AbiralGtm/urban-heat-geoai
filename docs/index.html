@@ -70,10 +70,21 @@ const HEAT = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'];
 const EXPOSURE = ['#f7f4f9', '#d4b9da', '#df65b0', '#ce1256', '#67001f'];
 
 const map = L.map('map', { preferCanvas: true });
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap, &copy; CARTO | Landsat 8/9, Copernicus DEM, ESA WorldCover, WorldPop',
-  maxZoom: 19
-}).addTo(map);
+
+// Esri's tiles need no key and no account. CARTO's basemaps now answer with a
+// watermark tile instead of a map, and the OpenStreetMap tile servers refuse
+// requests from applications they do not recognise.
+const DATA_CREDIT = 'Landsat 8/9, Copernicus DEM, ESA WorldCover, WorldPop, OpenStreetMap';
+const basemaps = {
+  'Light': L.tileLayer(
+    'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles &copy; Esri | ' + DATA_CREDIT, maxZoom: 16 }),
+  'Satellite': L.tileLayer(
+    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics | ' + DATA_CREDIT, maxZoom: 18 }),
+  'None': L.tileLayer('', { attribution: DATA_CREDIT })
+};
+basemaps['Light'].addTo(map);
 
 // Breaks are quantiles of the data, computed once the file is loaded, so the colours
 // use the full ramp whatever the range of this particular run.
@@ -123,7 +134,7 @@ fetch('data/kathmandu.geojson')
 
     const style = (ramp, breaks, field) => feature => ({
       fillColor: colourFor(feature.properties[field], breaks, ramp),
-      fillOpacity: 0.78,
+      fillOpacity: 0.72,
       color: '#ffffff',
       weight: 0.3
     });
@@ -149,6 +160,9 @@ fetch('data/kathmandu.geojson')
       null,
       { collapsed: false }
     ).addTo(map);
+
+    // A second control for the background, so the data layers keep their own radio group.
+    L.control.layers(basemaps, null, { collapsed: true, position: 'bottomright' }).addTo(map);
 
     const temperatures = cells.map(p => p.lst_mean);
     document.getElementById('legend').innerHTML =
