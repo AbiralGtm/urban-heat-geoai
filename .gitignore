@@ -21,5 +21,8 @@ data/processed/*.csv
 outputs/*.png
 outputs/*.csv
 
+# working notes and drafts, not part of the project
+notes/
+
 # OS
 .DS_Store

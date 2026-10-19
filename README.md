@@ -13,19 +13,38 @@ The hot and densely populated hexagons are then shown on an interactive map.
 This is a descriptive study of one season in one valley. It does not forecast
 temperature, and it does not show that any feature causes heat.
 
+**[Open the interactive map](https://abiralgtm.github.io/urban-heat-geoai/)**
+
+![Mean surface temperature and exposure across 980 hexagons of the Kathmandu valley](docs/images/heat_and_exposure.png)
+
 ## Pipeline
 
 | Stage | Script | Output |
 | --- | --- | --- |
 | 1. Grid | `src/01_make_grid.py` | `data/processed/kathmandu_grid.gpkg` |
-| 2. Satellite data | `gee/heat_kathmandu.js` | 6 rasters in `data/raw/kathmandu/` |
+| 2. Satellite data | `gee/heat_kathmandu.js` | 7 rasters in `data/raw/kathmandu/` |
 | 3. Features | `src/03_raster_features.py` | `data/processed/features.csv` |
 | 4. OSM (optional) | `src/04_osm_features.py` | road density, waterway distance |
 | 5. Model | `src/05_model.py` | `outputs/metrics.json`, SHAP plot |
 | 6. Vulnerability and map | `src/06_export_web.py` | `docs/data/kathmandu.geojson` |
+| 7. Figures | `src/07_figures.py` | `docs/images/` |
 
 Every stage reads `config.yaml` and the output of the stage before it, so any stage can
 be re-run on its own.
+
+## Data sources
+
+| Layer | Dataset | Native resolution | Used for |
+| --- | --- | --- | --- |
+| Surface temperature | Landsat 8/9 Collection 2 Level 2, band `ST_B10` | about 100 m, resampled to 30 m | model target |
+| Greenness (NDVI) | Landsat 8/9 surface reflectance, bands `SR_B4`, `SR_B5` | 30 m | feature |
+| Elevation, slope | Copernicus DEM GLO30 | 30 m | features |
+| Land cover | ESA WorldCover v200 (2021) | 10 m, exported at 30 m | share of each class |
+| Population | WorldPop GP 100 m, Nepal 2020 | about 93 m | exposure index only |
+| Roads, waterways | OpenStreetMap via osmnx | vector | features |
+
+Population is held out of the model on purpose, so that the model cannot reach the
+target through the same people it is later used to count.
 
 ## Satellite data
 
@@ -38,8 +57,9 @@ cloud cover under 30 %. Four scenes pass that filter over the valley (14 April,
 masked with `QA_PIXEL` and `QA_RADSAT` before compositing, and the composite is the
 median of the four scenes, so one bad pixel in one scene cannot pull it.
 
-The script also exports `valid_share`, the fraction of the four scenes for which each
-pixel survived the mask. Stage 3 uses it to drop hexagons that are mostly gap.
+Seven rasters are exported: `lst`, `ndvi`, `dem`, `slope`, `worldcover`, `pop_density`
+and `valid_share`. The last is the fraction of the four scenes for which each pixel
+survived the mask, and stage 3 uses it to drop hexagons that are mostly gap.
 
 Surface temperature comes from band `ST_B10` converted to degrees Celsius
 (`ST_B10 * 0.00341802 + 149.0 - 273.15`). It is a daytime skin temperature at roughly
@@ -88,8 +108,11 @@ known — they largely say the same thing about a hexagon. Elevation matters bec
 valley floor is both the warmest and the most built-up part of the study box, so the two
 cannot be separated with this design.
 
+![SHAP summary: what the forest used to predict hexagon temperature](docs/images/shap_summary.png)
+
 Exposure, the heat index times normalised log population density, puts 98 hexagons in
-the top decile. The map at `docs/index.html` shows both layers.
+the top decile. The [interactive map](https://abiralgtm.github.io/urban-heat-geoai/)
+shows both layers, with the per-hexagon numbers in a popup.
 
 ## Limits
 
@@ -123,9 +146,16 @@ python src/03_raster_features.py    # zonal statistics per hexagon
 python src/04_osm_features.py       # OpenStreetMap features, --skip to leave them out
 python src/05_model.py              # cross-validation, SHAP, metrics
 python src/06_export_web.py         # vulnerability index and GeoJSON
+python src/07_figures.py            # the two figures above
 python -m http.server --directory docs   # view the map at localhost:8000
 ```
 
 The rasters, the grid and the feature table are not committed; the scripts rebuild them.
 `outputs/metrics.json` and `outputs/exposure_summary.json` are committed, so the numbers
 in this README can be checked against the run that produced them.
+
+## License
+
+MIT, see `LICENSE`. The data belongs to its providers: Landsat (USGS, public domain),
+Copernicus DEM (ESA), ESA WorldCover (CC BY 4.0), WorldPop (CC BY 4.0) and
+OpenStreetMap (ODbL).
