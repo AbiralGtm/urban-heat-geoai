@@ -10,6 +10,9 @@ data/raw/**
 *.tif
 *.tif.aux.xml
 
+# osmnx writes its Overpass responses here
+cache/
+
 # intermediate tables
 data/processed/*.gpkg
 data/processed/*.csv
